@@ -1,7 +1,9 @@
 import os
 import sys
 import time
+import signal
 import logging
+import threading
 import subprocess
 
 import click
@@ -33,9 +35,10 @@ def _get_what(event):
 class RSyncEventHandler(FileSystemEventHandler):
     """RSync when the events captured."""
 
-    def __init__(self, local_path, remote_path, rsync_options=''):
+    def __init__(self, local_path, remote_path, rsync_event, rsync_options=''):
         self.local_path = local_path
         self.remote_path = remote_path
+        self.rsync_event = rsync_event
         self.rsync_options = rsync_options.split()
         self.rsync()
 
@@ -91,25 +94,46 @@ class RSyncEventHandler(FileSystemEventHandler):
 
         self.rsync()
 
-    def rsync(self, relative_path=None):
-        self.log('RSyncing', COLORS.PURPLE)
+    def rsync(self):
+        self.rsync_event.set()
 
-        local_path = self.local_path
-        remote_path = self.remote_path
-        if relative_path is not None:
-            local_path = os.path.join(local_path, relative_path)
-            remote_path = os.path.join(remote_path, relative_path)
 
-        cmd = 'rsync -avzP {} {} {}'.format(
-            ' '.join(self.rsync_options), local_path, remote_path
-        )
-        self.log(cmd, COLORS.BOLD)
-        with open(os.devnull, 'w') as DEVNULL:
-            subprocess.call(
-                cmd.split(' '),
-                stdout=DEVNULL,
-                stderr=subprocess.STDOUT
+class RSyncThread(threading.Thread):
+    def __init__(self, local_path, remote_path, rsync_event, rsync_options, shutdown_event):
+        self.local_path = local_path
+        self.remote_path = remote_path
+        self.rsync_event = rsync_event
+        self.rsync_options = rsync_options.split()
+        self.shutdown_event = shutdown_event
+
+        threading.Thread.__init__(self)
+
+    @staticmethod
+    def log(log, color):
+        logging.info('{}{}{}'.format(color, log, COLORS.END))
+
+    def run(self):
+        while not self.shutdown_event.is_set():
+            while not self.shutdown_event.is_set() and not self.rsync_event.is_set():
+                time.sleep(0.1)
+
+            self.rsync_event.clear()
+            self.log('RSyncing', COLORS.PURPLE)
+
+            local_path = self.local_path
+            remote_path = self.remote_path
+
+            cmd = 'rsync -avzP {} {} {}'.format(
+                ' '.join(self.rsync_options), local_path, remote_path
             )
+            self.log(cmd, COLORS.BOLD)
+
+            with open(os.devnull, 'w') as DEVNULL:
+                subprocess.call(
+                    cmd.split(' '),
+                    stdout=sys.stdout,
+                    stderr=subprocess.STDOUT
+                )
 
 
 @click.command()
@@ -141,14 +165,33 @@ def main(
             opts = map(str.strip, opts_file)
             rsync_options += u' '.join(opts)
 
-    event_handler = RSyncEventHandler(local_path, remote_path, rsync_options)
+    rsync_event = threading.Event()
+    shutdown_event = threading.Event()
+
+    class ShutdownException:
+        pass
+
+    def shutdown(signum, frame):
+        print('Caught signal %d' % signum)
+        raise ShutdownException()
+
+    signal.signal(signal.SIGTERM, shutdown)
+    signal.signal(signal.SIGINT, shutdown)
+
+    rsync = RSyncThread(local_path, remote_path, rsync_event,
+                        rsync_options, shutdown_event)
+    rsync.start()
+
+    event_handler = RSyncEventHandler(
+        local_path, remote_path, rsync_event, rsync_options)
     observer = Observer(timeout=observer_timeout)
     observer.schedule(event_handler, local_path, recursive=True)
     observer.start()
     try:
         while True:
             time.sleep(1)
-    except KeyboardInterrupt:
+    except ShutdownException:
+        shutdown_event.set()
         observer.stop()
     observer.join()
 
