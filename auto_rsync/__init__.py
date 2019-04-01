@@ -123,7 +123,7 @@ class RSyncThread(threading.Thread):
             local_path = self.local_path
             remote_path = self.remote_path
 
-            cmd = 'rsync -avzP {} {} {}'.format(
+            cmd = 'rsync -avP {} {} {}'.format(
                 ' '.join(self.rsync_options), local_path, remote_path
             )
             self.log(cmd, COLORS.BOLD)
