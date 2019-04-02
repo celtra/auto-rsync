@@ -5,6 +5,7 @@ import signal
 import logging
 import threading
 import subprocess
+import shlex
 
 import click
 from watchdog.observers import Observer
@@ -103,7 +104,7 @@ class RSyncThread(threading.Thread):
         self.local_path = local_path
         self.remote_path = remote_path
         self.rsync_event = rsync_event
-        self.rsync_options = rsync_options.split()
+        self.rsync_options = shlex.split(rsync_options)
         self.shutdown_event = shutdown_event
 
         threading.Thread.__init__(self)
