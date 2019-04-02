@@ -40,7 +40,7 @@ class RSyncEventHandler(FileSystemEventHandler):
         self.local_path = local_path
         self.remote_path = remote_path
         self.rsync_event = rsync_event
-        self.rsync_options = shlex.split(rsync_options, posix=False)
+        self.rsync_options = rsync_options
         self.rsync()
 
     @staticmethod
@@ -104,7 +104,7 @@ class RSyncThread(threading.Thread):
         self.local_path = local_path
         self.remote_path = remote_path
         self.rsync_event = rsync_event
-        self.rsync_options = shlex.split(rsync_options, posix=False)
+        self.rsync_options = rsync_options
         self.shutdown_event = shutdown_event
 
         threading.Thread.__init__(self)
@@ -124,9 +124,7 @@ class RSyncThread(threading.Thread):
             local_path = self.local_path
             remote_path = self.remote_path
 
-            cmd = 'rsync -avP {} {} {}'.format(
-                ' '.join(self.rsync_options), local_path, remote_path
-            )
+            cmd = 'rsync -avP {} {} {}'.format(rsync_options, local_path, remote_path)
             self.log(cmd, COLORS.BOLD)
 
             with open(os.devnull, 'w') as DEVNULL:
