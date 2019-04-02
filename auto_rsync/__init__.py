@@ -124,7 +124,7 @@ class RSyncThread(threading.Thread):
             local_path = self.local_path
             remote_path = self.remote_path
 
-            cmd = 'rsync -avP {} {} {}'.format(rsync_options, local_path, remote_path)
+            cmd = 'rsync -avP {} {} {}'.format(self.rsync_options, local_path, remote_path)
             self.log(cmd, COLORS.BOLD)
 
             with open(os.devnull, 'w') as DEVNULL:
