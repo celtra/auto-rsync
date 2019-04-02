@@ -129,7 +129,7 @@ class RSyncThread(threading.Thread):
 
             with open(os.devnull, 'w') as DEVNULL:
                 subprocess.call(
-                    shlex.split(cmd, posix=False),
+                    shlex.split(cmd),
                     stdout=sys.stdout,
                     stderr=subprocess.STDOUT,
                     shell=True,
